@@ -409,5 +409,5 @@ def get_dashboard(db: Session = Depends(get_db)):
 # ---------- Frontend statique en développement local uniquement ----------
 if not os.getenv("VERCEL"):
     from fastapi.staticfiles import StaticFiles
-    ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "public")
     app.mount("/", StaticFiles(directory=ROOT, html=True), name="static")
