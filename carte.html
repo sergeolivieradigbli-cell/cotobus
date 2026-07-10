@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carte réseau — CotoBus</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-page="carte">
+
+<main>
+  <div class="hero">
+    <div class="crumb"><a href="index.html">Accueil</a> / Carte réseau</div>
+    <div class="eyebrow">Temps réel · positions GPS de la flotte</div>
+    <h1>Carte du réseau</h1>
+    <p class="lead">Positions des navettes rafraîchies toutes les 2 secondes depuis l'API.
+    Cliquez sur un arrêt (cercle) pour afficher les prochains passages, calculés côté serveur
+    à partir de la position réelle des bus. Cliquez sur une navette pour voir sa charge.</p>
+  </div>
+
+  <div id="map"></div>
+
+  <div class="stop-info" id="stopInfo">
+    <div><div class="name">Cliquez sur un arrêt</div>
+    <div style="font-size:.8rem;color:var(--muted)">Les temps d'attente s'afficheront ici.</div></div>
+  </div>
+
+  <h2 style="font-size:1.1rem;margin:26px 0 12px">Les lignes en détail</h2>
+  <div class="grid cols-3" id="lineCards"></div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>Comment sont calculées les ETA ?</h3>
+    <div class="sub">Transparence de l'algorithme — pas de boîte noire.</div>
+    <p style="font-size:.9rem;color:var(--muted);line-height:1.6">
+    Chaque navette remonte sa position (fraction de ligne parcourue, sens de marche).
+    Le serveur calcule la distance restante jusqu'à l'arrêt demandé dans le sens de marche
+    — demi-tour au terminus inclus — et la convertit en minutes sur la base d'une durée
+    de ligne d'environ 35 minutes. En production, ce modèle simple sera remplacé par une
+    régression sur l'historique réel des temps de parcours, heure par heure, embouteillages compris.</p>
+  </div>
+
+  <div class="footer-note">Fond de carte © OpenStreetMap · positions simulées côté serveur</div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="assets/app.js"></script>
+<script>
+const map = L.map('map').setView([6.383, 2.40], 12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {attribution:'© OpenStreetMap', maxZoom:18}).addTo(map);
+
+let LINES = {}, busMarkers = {};
+
+function busIcon(color){
+  return L.divIcon({className:'', iconSize:[22,16], iconAnchor:[11,8],
+    html:`<div style="width:22px;height:15px;background:${color};border:2px solid #12251c;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`});
+}
+
+async function loadNetwork(){
+  const lines = await api('/network/lines');
+  const cards = document.getElementById('lineCards');
+  lines.forEach(L_=>{
+    LINES[L_.id] = L_;
+    // tracé + arrêts sur la carte
+    L.polyline(L_.stops.map(s=>[s.lat,s.lon]),
+               {color:L_.color,weight:6,opacity:.85}).addTo(map);
+    L_.stops.forEach(s=>{
+      L.circleMarker([s.lat,s.lon],
+          {radius:7,color:L_.color,weight:3,fillColor:'#fff',fillOpacity:1})
+        .addTo(map).bindTooltip(s.name)
+        .on('click',()=>showEta(s.name));
+    });
+    // fiche ligne
+    const chain = L_.stops.map(s=>`<b>${s.name}</b>`)
+                          .join('<span class="sep"> › </span>');
+    cards.innerHTML += `
+      <div class="card">
+        <div class="line-pill"><i style="background:${L_.color}"></i>Ligne ${L_.id}</div>
+        <h3 style="margin-top:6px;font-size:.95rem">${L_.name}</h3>
+        <div class="stops-chain">${chain}</div>
+        <div class="fare-row" style="margin-top:10px"><span>Tarif</span><strong>${L_.fare_fcfa} FCFA</strong></div>
+        <div class="fare-row"><span>Navettes en service</span><strong id="cnt-${L_.id}">—</strong></div>
+        <div class="fare-row"><span>Créneaux</span><strong>6h30–9h · 17h30–20h</strong></div>
+      </div>`;
+  });
+}
+
+async function refreshBuses(){
+  try{
+    const buses = await api('/network/buses');
+    const perLine = {};
+    buses.forEach(b=>{
+      perLine[b.line_id]=(perLine[b.line_id]||0)+1;
+      const tip = `${b.plate} · Ligne ${b.line_id} · ${b.passenger_count} montées`;
+      if(!busMarkers[b.id]){
+        busMarkers[b.id]=L.marker([b.lat,b.lon],
+          {icon:busIcon(LINES[b.line_id]?.color||'#333')})
+          .addTo(map).bindTooltip(tip);
+      }else{
+        busMarkers[b.id].setLatLng([b.lat,b.lon]).setTooltipContent(tip);
+      }
+    });
+    Object.entries(perLine).forEach(([id,n])=>{
+      const el=document.getElementById('cnt-'+id); if(el) el.textContent=n;
+    });
+  }catch(e){/* pastille header déjà rouge */}
+}
+
+async function showEta(name){
+  const info=document.getElementById('stopInfo');
+  info.innerHTML=`<div><div class="name">${name}</div>
+    <div style="font-size:.8rem;color:var(--muted)">Chargement…</div></div>`;
+  try{
+    const d = await api('/network/stops/'+encodeURIComponent(name)+'/eta');
+    let html=`<div><div class="name">${name}</div>
+      <div style="font-size:.8rem;color:var(--muted)">Prochains passages</div></div>`;
+    d.etas.forEach(e=>{
+      html+=`<div class="eta"><i style="background:${e.color}"></i>
+        Ligne ${e.line_id} · <strong>&nbsp;${e.next_minutes} min&nbsp;</strong> puis ${e.following_minutes} min</div>`;
+    });
+    info.innerHTML=html;
+  }catch(e){
+    info.innerHTML=`<div><div class="name">${name}</div>
+      <div style="color:var(--red);font-size:.85rem">${e.message}</div></div>`;
+  }
+}
+
+loadNetwork().then(()=>{ refreshBuses(); setInterval(refreshBuses,2000); });
+</script>
+</body>
+</html>
