@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Valideur — CotoBus</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-page="valideur">
+
+<main>
+  <div class="hero">
+    <div class="crumb"><a href="index.html">Accueil</a> / Valideur</div>
+    <div class="eyebrow">Terminal chauffeur · valideur embarqué</div>
+    <h1>Valider un billet</h1>
+    <p class="lead">À la montée, le chauffeur scanne le QR du voyageur. Le serveur tranche :
+    billet inconnu, déjà utilisé, expiré ou d'une autre ligne → refus immédiat.
+    En production le scan se fait à la caméra ; ici, collez le code du billet.</p>
+  </div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h3>Scan à la montée</h3>
+      <div class="sub" id="prefillHint">Achetez d'abord un billet sur la page « Mon billet », son code se pré-remplira ici.</div>
+      <label for="valCode">Code billet</label>
+      <input type="text" id="valCode" placeholder="CB-20260704-XXXXXXXXXX" class="mono">
+      <label for="valBus">Bus (terminal embarqué)</label>
+      <select id="valBus"></select>
+      <button class="btn btn-dark" id="btnValidate">Valider la montée</button>
+      <div class="val-result" id="valResult"></div>
+      <div class="notice" style="margin-top:14px">
+        💡 Démo pour le jury : validez un billet (✅), revalidez-le (⛔ « déjà utilisé »),
+        puis essayez-le sur un bus d'une autre ligne (⛔ « mauvaise ligne »).
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Les règles appliquées par le serveur</h3>
+      <div class="sub">Aucune décision côté client — impossible à contourner.</div>
+      <div class="fare-row"><span>Billet inconnu</span><strong style="color:var(--red)">Refus</strong></div>
+      <div class="fare-row"><span>Billet déjà validé (anti-réutilisation)</span><strong style="color:var(--red)">Refus</strong></div>
+      <div class="fare-row"><span>Billet expiré (&gt; 2 h)</span><strong style="color:var(--red)">Refus</strong></div>
+      <div class="fare-row"><span>Billet d'une autre ligne</span><strong style="color:var(--red)">Refus</strong></div>
+      <div class="fare-row"><span>Billet payé, valide, bonne ligne</span><strong style="color:var(--green)">Bon voyage ✅</strong></div>
+      <p style="font-size:.88rem;color:var(--muted);line-height:1.6;margin-top:12px">
+      Chaque validation est horodatée et rattachée au bus. En parallèle, un capteur embarqué
+      compte les montées physiques : si 40 personnes montent mais que 32 billets sont validés,
+      l'écart apparaît instantanément sur le tableau de bord de la commune. La fraude des
+      receveurs — qui a tué les réseaux précédents — devient un indicateur public.</p>
+    </div>
+  </div>
+
+  <h2 style="font-size:1.1rem;margin:26px 0 12px">Journal des validations</h2>
+  <div class="card">
+    <div class="sub">Les derniers scans acceptés, en direct.</div>
+    <table class="tbl">
+      <thead><tr><th>Heure</th><th>Billet</th><th>Trajet</th><th>Bus</th></tr></thead>
+      <tbody id="valRows"><tr><td colspan="4" style="color:var(--muted)">Aucune validation pour l'instant.</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="footer-note">En production : app valideur Android (caméra) + mode hors-ligne avec file de synchronisation</div>
+</main>
+
+<script src="assets/app.js"></script>
+<script>
+async function init(){
+  const buses = await api('/network/buses');
+  document.getElementById('valBus').innerHTML =
+    buses.map(b=>`<option value="${b.id}">${b.plate} — Ligne ${b.line_id}</option>`).join('');
+  try{
+    const last = sessionStorage.getItem('lastTicketCode');
+    if(last){
+      document.getElementById('valCode').value = last;
+      document.getElementById('prefillHint').textContent =
+        'Code pré-rempli avec votre dernier achat — choisissez un bus et validez.';
+    }
+  }catch(_){}
+  refreshLog();
+}
+
+document.getElementById('btnValidate').addEventListener('click', async ()=>{
+  const res=document.getElementById('valResult');
+  res.className='val-result';
+  try{
+    const d = await api('/tickets/validate',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        code:document.getElementById('valCode').value.trim(),
+        bus_id:parseInt(document.getElementById('valBus').value)
+      })});
+    res.classList.add(d.ok?'ok':'ko');
+    res.textContent=(d.ok?'✅ ':'⛔ ')+d.message;
+    if(d.ok) refreshLog();
+  }catch(e){
+    res.classList.add('ko'); res.textContent='⛔ '+e.message;
+  }
+});
+
+async function refreshLog(){
+  try{
+    const rows = await api('/tickets/validations/recent?limit=10');
+    if(!rows.length) return;
+    document.getElementById('valRows').innerHTML = rows.map(v=>`<tr>
+      <td>${fmtTime(v.validated_at)}</td>
+      <td class="mono" style="font-size:.75rem">${v.code}</td>
+      <td>L${v.line_id} · ${v.from_stop} → ${v.to_stop}</td>
+      <td>${v.bus_plate}</td></tr>`).join('');
+  }catch(e){/* silencieux */}
+}
+
+init();
+setInterval(refreshLog, 6000);
+</script>
+</body>
+</html>
