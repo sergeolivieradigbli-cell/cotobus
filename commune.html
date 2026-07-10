@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Commune — Tableau de bord CotoBus</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-page="commune">
+
+<main>
+  <div class="hero">
+    <div class="crumb"><a href="index.html">Accueil</a> / Commune</div>
+    <div class="eyebrow">Vue mairie · rafraîchie toutes les 5 s</div>
+    <h1>Tableau de bord municipal</h1>
+    <p class="lead">La transparence qui manquait aux réseaux d'hier : recettes exactes au franc près,
+    contrôle antifraude en continu, charge des lignes, santé de la flotte et impact carbone —
+    tout ce qu'il faut pour piloter, arbitrer et rendre compte aux citoyens.</p>
+  </div>
+
+  <div class="grid cols-3">
+    <div class="card kpi">
+      <div class="v" id="kRev">—</div>
+      <div class="l">Recettes du jour</div>
+      <div class="d up">Écart caisse : 0 F — paiement 100 % dématérialisé</div>
+      <div id="byMethod" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"></div>
+    </div>
+    <div class="card kpi">
+      <div class="v" id="kVal">—</div>
+      <div class="l">Billets validés / montées capteur</div>
+      <div class="d" id="kGap">—</div>
+    </div>
+    <div class="card kpi">
+      <div class="v" id="kCo2">—</div>
+      <div class="l">CO₂ évité aujourd'hui</div>
+      <div class="d up" id="kFuel">—</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>Contrôle antifraude — le croisement clé</h3>
+    <div class="sub">Validations serveur vs montées comptées par les capteurs embarqués.</div>
+    <p style="font-size:.9rem;color:var(--muted);line-height:1.6" id="fraudExplain">—</p>
+    <div class="notice" id="fraudVerdict">—</div>
+  </div>
+
+  <div class="grid cols-2e" style="margin-top:16px">
+    <div class="card">
+      <h3>Fréquentation par heure</h3>
+      <div class="sub">Validations agrégées côté serveur — la base du dimensionnement des fréquences.</div>
+      <div class="barchart" id="chart"></div>
+      <div style="height:22px"></div>
+    </div>
+    <div class="card">
+      <h3>Maintenance prédictive</h3>
+      <div class="sub">Alertes issues de la télémétrie IoT (température moteur, vibrations, freins).</div>
+      <div id="alerts"><div style="font-size:.85rem;color:var(--muted)">Aucune alerte active — flotte nominale ✅</div></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>Charge par ligne & recommandations</h3>
+    <div class="sub">Le système propose où ajouter ou retirer une navette. La décision reste humaine.</div>
+    <div id="loads" style="margin-top:4px">Chargement…</div>
+  </div>
+
+  <div class="grid cols-2e" style="margin-top:16px">
+    <div class="card">
+      <h3>Ce que la commune y gagne</h3>
+      <div class="sub">Au-delà du transport.</div>
+      <div class="fare-row"><span>Recettes traçables au franc près, auditables</span><span>💰</span></div>
+      <div class="fare-row"><span>Données de mobilité pour la planification urbaine</span><span>🗺️</span></div>
+      <div class="fare-row"><span>Indicateur CO₂ public pour les engagements climat</span><span>🌱</span></div>
+      <div class="fare-row"><span>Maintenance planifiée = flotte qui dure</span><span>🔧</span></div>
+    </div>
+    <div class="card">
+      <h3>Méthodologie CO₂</h3>
+      <div class="sub">Un chiffre défendable devant un jury ou un bailleur.</div>
+      <p style="font-size:.88rem;color:var(--muted);line-height:1.6">
+      Hypothèse conservatrice : chaque montée remplace un trajet individuel moyen de 8 km
+      (zémidjan ou voiture), soit ≈ 0,32 kg CO₂ et ≈ 0,13 L de carburant par trajet évité.
+      Le calcul est fait côté serveur sur les montées réellement comptées — pas d'estimation
+      déclarative. En production, l'hypothèse sera affinée par une enquête origine-destination.</p>
+    </div>
+  </div>
+
+  <div class="footer-note">Prototype CotoBus — Communalthon Cotonou 2026 · données simulées à des fins de démonstration</div>
+</main>
+
+<script src="assets/app.js"></script>
+<script>
+async function refresh(){
+  try{
+    const d = await api('/dashboard');
+
+    document.getElementById('kRev').textContent = fmtNum(d.revenue_today_fcfa)+' F';
+    document.getElementById('byMethod').innerHTML =
+      Object.entries(d.revenue_by_method||{}).map(([m,v])=>
+        `<span class="badge PAID" style="font-size:.62rem">${m.replace('_',' ')} · ${fmtNum(v)} F</span>`
+      ).join('') || '<span style="font-size:.72rem;color:var(--muted)">Aucune vente pour l\u2019instant</span>';
+    document.getElementById('kVal').textContent =
+      fmtNum(d.validations_today)+' / '+fmtNum(d.fraud.sensor_boardings_today);
+    document.getElementById('kCo2').textContent = d.co2_saved_kg+' kg';
+    document.getElementById('kFuel').textContent =
+      '≈ '+d.fuel_saved_l+' L de carburant économisés';
+
+    const g=document.getElementById('kGap');
+    const ok = d.fraud.gap<=0;
+    g.textContent = ok ? 'Aucun écart détecté ✅'
+      : `⚠ écart de ${fmtNum(d.fraud.gap)} montées (${d.fraud.gap_pct} %)`;
+    g.className='d '+(ok?'up':'down');
+
+    document.getElementById('fraudExplain').textContent =
+      `Aujourd'hui : ${fmtNum(d.validations_today)} billets validés côté serveur, `+
+      `${fmtNum(d.fraud.sensor_boardings_today)} montées physiques comptées par les capteurs embarqués. `+
+      `Dans un réseau classique, cet écart était invisible — c'est exactement là que les recettes disparaissaient.`;
+    const v=document.getElementById('fraudVerdict');
+    v.textContent = ok
+      ? '✅ Recettes et montées cohérentes — aucun signe de fraude.'
+      : `⚠ ${fmtNum(d.fraud.gap)} montées sans billet validé (${d.fraud.gap_pct} %) — contrôle ciblé recommandé sur les bus concernés. (En démo : le simulateur fait monter des passagers sans billet, exprès, pour montrer la détection.)`;
+    v.style.background = ok ? '#eef7f2' : '#fdf3d7';
+    v.style.borderColor = ok ? '#cfe6da' : '#f0e0a8';
+    v.style.color = ok ? 'var(--green)' : '#8a6d00';
+
+    // Fréquentation
+    const chart=document.getElementById('chart'); chart.innerHTML='';
+    const hours=d.hourly.length?d.hourly:[{hour:new Date().getHours(),passengers:0}];
+    const mx=Math.max(...hours.map(h=>h.passengers),1);
+    hours.forEach(h=>{
+      const b=document.createElement('div');
+      b.className='b'; b.style.height=Math.max(6,100*h.passengers/mx)+'%';
+      b.title=`${h.hour}h : ${h.passengers} validations`;
+      b.innerHTML=`<em>${h.hour}h</em>`; chart.appendChild(b);
+    });
+
+    // Charge par ligne
+    const loads=document.getElementById('loads'); loads.innerHTML='';
+    d.line_loads.forEach(l=>{
+      loads.innerHTML+=`<div style="padding:9px 0">
+        <div style="display:flex;justify-content:space-between;font-size:.9rem;gap:10px">
+          <span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${l.color};margin-right:8px"></i>Ligne ${l.line_id} · ${l.name}</span>
+          <strong>${l.load_pct} %</strong></div>
+        <div class="loadbar"><i style="width:${Math.min(l.load_pct,100)}%;background:${l.color}"></i></div>
+        ${l.recommendation?`<div style="font-size:.78rem;color:var(--muted);margin-top:4px">→ ${l.recommendation}</div>`:''}
+      </div>`;
+    });
+
+    // Alertes
+    if(d.alerts.length){
+      const box=document.getElementById('alerts'); box.innerHTML='';
+      d.alerts.forEach(a=>{
+        const crit=a.severity==='CRITICAL';
+        box.innerHTML+=`<div class="alert-row">
+          <div class="alert-ico ${crit?'a-crit':'a-warn'}">${crit?'🔧':'🛞'}</div>
+          <div><div class="t">${a.title}</div><div class="s">${a.detail} · ${fmtTime(a.created_at)}</div></div>
+          <span class="tag ${a.severity}">${crit?'Critique':'À surveiller'}</span></div>`;
+      });
+    }
+  }catch(e){/* pastille header déjà rouge */}
+}
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
