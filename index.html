@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CotoBus — Le réseau de navettes intelligent de Cotonou</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  /* spécifique accueil : cartes-menu cliquables */
+  .menu-card{display:block;text-decoration:none;position:relative;transition:transform .12s,box-shadow .15s}
+  .menu-card:hover{transform:translateY(-3px);box-shadow:0 10px 24px rgba(18,37,28,.10)}
+  .menu-card .go{position:absolute;top:16px;right:16px;font-family:'Archivo';font-weight:900;color:var(--green)}
+  .menu-card .ico{font-size:1.5rem;margin-bottom:8px}
+  .menu-card ul{margin:10px 0 0 0;padding:0;list-style:none}
+  .menu-card li{font-size:.83rem;color:var(--muted);padding:3px 0 3px 18px;position:relative}
+  .menu-card li::before{content:'›';position:absolute;left:2px;color:var(--yellow);font-weight:900}
+  .hero-cta{display:flex;gap:10px;margin-top:22px;flex-wrap:wrap}
+  .hero-cta .btn{width:auto;margin-top:0;padding:12px 22px}
+</style>
+</head>
+<body data-page="accueil">
+
+<main>
+  <div class="hero">
+    <div class="eyebrow">Communalthon Cotonou 2026 · Solution digitale verte</div>
+    <h1>Le réseau de navettes de Cotonou, <em>piloté par la donnée</em>.</h1>
+    <p class="lead">Chaque matin, des milliers de fonctionnaires et d'employés convergent vers les
+    mêmes zones, seuls dans leur véhicule ou en zémidjan : embouteillages, émissions massives,
+    temps perdu. Les bus urbains ont déjà été tentés à Cotonou — et ont échoué. CotoBus reprend
+    l'idée en corrigeant, par le numérique, chacune des causes d'échec documentées.</p>
+    <div class="hero-cta">
+      <a class="btn btn-pay" href="carte.html">Voir le réseau en direct</a>
+      <a class="btn btn-ghost" href="billet.html" style="border:1.5px solid var(--line);background:#fff">Acheter un billet démo</a>
+    </div>
+    <div class="hero-stats" style="display:flex;flex-wrap:wrap;gap:12px;margin-top:26px">
+      <div class="stat"><div class="v"><span class="api-live" id="sBus">—</span></div><div class="l">navettes en circulation</div></div>
+      <div class="stat"><div class="v" id="sPax">—</div><div class="l">montées comptées aujourd'hui</div></div>
+      <div class="stat"><div class="v" id="sCo2">—</div><div class="l">CO₂ évité aujourd'hui</div></div>
+      <div class="stat"><div class="v" id="sRev">—</div><div class="l">recettes traçables du jour</div></div>
+    </div>
+  </div>
+
+  <h2 style="font-size:1.15rem;margin:8px 0 12px">Explorer la plateforme</h2>
+  <div class="grid cols-2e">
+    <a class="card menu-card" href="carte.html">
+      <span class="go">→</span>
+      <div class="ico">🗺️</div>
+      <h3>Carte réseau</h3>
+      <div class="sub">Le réseau vivant, en temps réel.</div>
+      <ul>
+        <li>3 lignes, 18 arrêts géolocalisés sur carte OpenStreetMap</li>
+        <li>Position GPS des 6 navettes rafraîchie toutes les 2 s</li>
+        <li>Prochains passages calculés par le serveur à chaque arrêt</li>
+        <li>Fiches détaillées des lignes : arrêts, tarif, créneaux</li>
+      </ul>
+    </a>
+    <a class="card menu-card" href="billet.html">
+      <span class="go">→</span>
+      <div class="ico">🎫</div>
+      <h3>Mon billet</h3>
+      <div class="sub">Zéro cash, zéro fraude.</div>
+      <ul>
+        <li>Paiement Mobile Money (MTN, Moov, Celtiis) — simulé</li>
+        <li>QR à usage unique généré côté serveur, expirant après 2 h</li>
+        <li>Référence de transaction traçable au franc près</li>
+        <li>Journal des billets émis, statut en direct</li>
+      </ul>
+    </a>
+    <a class="card menu-card" href="valideur.html">
+      <span class="go">→</span>
+      <div class="ico">📲</div>
+      <h3>Valideur</h3>
+      <div class="sub">Le terminal du chauffeur.</div>
+      <ul>
+        <li>Scan du billet à la montée — décision 100 % côté serveur</li>
+        <li>Refus : billet inconnu, réutilisé, expiré ou d'une autre ligne</li>
+        <li>Journal horodaté des validations, rattachées au bus</li>
+        <li>La démo antifraude à faire devant le jury</li>
+      </ul>
+    </a>
+    <a class="card menu-card" href="commune.html">
+      <span class="go">→</span>
+      <div class="ico">🏛️</div>
+      <h3>Commune</h3>
+      <div class="sub">Le poste de pilotage municipal.</div>
+      <ul>
+        <li>Recettes exactes + répartition par opérateur Mobile Money</li>
+        <li>Croisement validations / capteurs : la fraude devient visible</li>
+        <li>Charge par ligne et recommandations de fréquence</li>
+        <li>Alertes de maintenance prédictive (télémétrie IoT)</li>
+      </ul>
+    </a>
+  </div>
+
+  <h2 style="font-size:1.15rem;margin:28px 0 12px">Pourquoi les bus ont échoué — et comment CotoBus répond</h2>
+  <div class="why grid cols-3">
+    <div class="card">
+      <div class="num">Échec historique · 01</div>
+      <h3 style="margin-top:6px">La fraude aux recettes</h3>
+      <p style="font-size:.9rem;color:var(--muted);line-height:1.55;margin-top:8px">
+      Les receveurs faisaient monter les passagers hors compteur : les recettes
+      s'évaporaient, l'exploitant coulait.</p>
+      <div class="fix" style="margin-top:10px;font-size:.85rem;font-weight:600;color:var(--green)">
+      → Paiement dématérialisé, QR unique, croisement capteur passagers.</div>
+    </div>
+    <div class="card">
+      <div class="num">Échec historique · 02</div>
+      <h3 style="margin-top:6px">Les pannes à répétition</h3>
+      <p style="font-size:.9rem;color:var(--muted);line-height:1.55;margin-top:8px">
+      Flotte amortie, entretien improvisé : bus immobilisés en pleine ligne,
+      coûts d'exploitation ingérables.</p>
+      <div class="fix" style="margin-top:10px;font-size:.85rem;font-weight:600;color:var(--green)">
+      → Télémétrie IoT embarquée et alertes de maintenance avant la panne.</div>
+    </div>
+    <div class="card">
+      <div class="num">Échec historique · 03</div>
+      <h3 style="margin-top:6px">Le pilotage à l'aveugle</h3>
+      <p style="font-size:.9rem;color:var(--muted);line-height:1.55;margin-top:8px">
+      Personne ne savait quelles lignes remplissaient ni où ajuster les
+      fréquences : impossible d'optimiser.</p>
+      <div class="fix" style="margin-top:10px;font-size:.85rem;font-weight:600;color:var(--green)">
+      → Chaque validation est une donnée : lignes optimisées en continu.</div>
+    </div>
+  </div>
+
+  <h2 style="font-size:1.15rem;margin:28px 0 12px">Parcours de démonstration (3 minutes)</h2>
+  <div class="steps grid cols-2e">
+    <div class="card">
+      <h3>Le réseau vit</h3>
+      <p style="font-size:.88rem;color:var(--muted);line-height:1.55;margin-top:4px">
+      Ouvrez la <a href="carte.html" style="color:var(--green);font-weight:600">carte</a> :
+      les navettes bougent, cliquez un arrêt pour les prochains passages.</p>
+    </div>
+    <div class="card">
+      <h3>Payez sans cash</h3>
+      <p style="font-size:.88rem;color:var(--muted);line-height:1.55;margin-top:4px">
+      Sur <a href="billet.html" style="color:var(--green);font-weight:600">Mon billet</a>,
+      payez 150 F en Mobile Money : QR + référence de transaction instantanés.</p>
+    </div>
+    <div class="card">
+      <h3>Cassez la fraude</h3>
+      <p style="font-size:.88rem;color:var(--muted);line-height:1.55;margin-top:4px">
+      Sur le <a href="valideur.html" style="color:var(--green);font-weight:600">valideur</a> :
+      validez (✅), revalidez (⛔ déjà utilisé), changez de ligne (⛔ refus).</p>
+    </div>
+    <div class="card">
+      <h3>Pilotez la ville</h3>
+      <p style="font-size:.88rem;color:var(--muted);line-height:1.55;margin-top:4px">
+      Sur <a href="commune.html" style="color:var(--green);font-weight:600">Commune</a> :
+      recettes, écart antifraude, CO₂, charge des lignes, alertes maintenance.</p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:28px">
+    <h3>L'impact vert, en une phrase</h3>
+    <p style="font-size:.92rem;color:var(--muted);line-height:1.6;margin-top:6px">
+    Un minibus de 18 places rempli aux heures de pointe retire jusqu'à 15 véhicules ou motos
+    du trafic sur le même trajet. À l'échelle d'une seule ligne (2 navettes, 4 rotations
+    matin + soir), c'est de l'ordre de <strong>200 trajets individuels évités par jour</strong>,
+    soit ≈ 65 kg de CO₂ et 27 L de carburant — mesurés par les montées réelles, pas déclarés.
+    Le compteur tourne en direct sur cette page.</p>
+  </div>
+
+  <div class="footer-note">Prototype CotoBus — Communalthon Cotonou 2026 · FastAPI + SQLite + Leaflet · données simulées</div>
+</main>
+
+<script src="assets/app.js"></script>
+<script>
+async function refreshHero(){
+  try{
+    const [buses, dash] = await Promise.all([api('/network/buses'), api('/dashboard')]);
+    document.getElementById('sBus').textContent = buses.length;
+    document.getElementById('sPax').textContent = fmtNum(dash.fraud.sensor_boardings_today);
+    document.getElementById('sCo2').textContent = dash.co2_saved_kg + ' kg';
+    document.getElementById('sRev').textContent = fmtNum(dash.revenue_today_fcfa) + ' F';
+  }catch(e){/* pastille header déjà rouge */}
+}
+refreshHero();
+setInterval(refreshHero, 5000);
+</script>
+</body>
+</html>
