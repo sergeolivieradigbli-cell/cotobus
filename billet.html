@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mon billet — CotoBus</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-page="billet">
+
+<main>
+  <div class="hero">
+    <div class="crumb"><a href="index.html">Accueil</a> / Mon billet</div>
+    <div class="eyebrow">Zéro cash · zéro fraude</div>
+    <h1>Acheter un billet</h1>
+    <p class="lead">Le paiement est encaissé en Mobile Money avant même la montée : la recette
+    est enregistrée à la seconde près, l'argent ne passe jamais par les mains d'un receveur.
+    Le QR généré par le serveur est à usage unique et expire après 2 heures.</p>
+  </div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h3>Votre trajet</h3>
+      <div class="sub">Tarif unique par trajet, quelle que soit la distance sur la ligne.</div>
+      <label for="selLine">Ligne</label>
+      <select id="selLine"></select>
+      <label for="selFrom">Départ</label>
+      <select id="selFrom"></select>
+      <label for="selTo">Arrivée</label>
+      <select id="selTo"></select>
+      <label for="phone">Numéro Mobile Money</label>
+      <input type="text" id="phone" value="97 00 00 00" inputmode="tel">
+      <label>Opérateur</label>
+      <div class="paydots" id="payMethods">
+        <span class="on" data-m="MTN_MOMO">MTN MoMo</span>
+        <span data-m="MOOV">Moov Money</span>
+        <span data-m="CELTIIS">Celtiis Cash</span>
+      </div>
+      <div style="margin-top:14px">
+        <div class="fare-row"><span>Trajet simple</span><strong id="fareLbl">— FCFA</strong></div>
+        <div class="fare-row"><span>Frais</span><strong>0 FCFA</strong></div>
+      </div>
+      <button class="btn btn-pay" id="btnPay">Payer</button>
+      <div class="val-result" id="payError"></div>
+    </div>
+
+    <div>
+      <div class="ticket" id="ticket">
+        <div class="tno" id="tNo"></div>
+        <h3>CotoBus · Trajet simple</h3>
+        <div class="route" id="tRoute"></div>
+        <img id="tQr" alt="QR code du billet">
+        <div class="valid" id="tValid"></div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h3>Pourquoi c'est antifraude</h3>
+        <div class="sub">La faille qui a tué Benafrique, fermée par design.</div>
+        <div class="fare-row"><span>Recette enregistrée au paiement, pas à bord</span><span>✅</span></div>
+        <div class="fare-row"><span>QR à usage unique — revalidation refusée</span><span>✅</span></div>
+        <div class="fare-row"><span>Billet lié à sa ligne — inutilisable ailleurs</span><span>✅</span></div>
+        <div class="fare-row"><span>Expiration automatique après 2 h</span><span>✅</span></div>
+        <div class="fare-row"><span>Croisement avec le compteur passagers du bus</span><span>✅</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h2 style="font-size:1.1rem;margin:26px 0 12px">Billets récents</h2>
+  <div class="card">
+    <div class="sub">Les derniers billets émis par la plateforme (démo). En production : l'historique du compte de l'usager.</div>
+    <table class="tbl">
+      <thead><tr><th>Code</th><th>Trajet</th><th>Paiement</th><th>Statut</th><th>Heure</th></tr></thead>
+      <tbody id="ticketRows"><tr><td colspan="5" style="color:var(--muted)">Chargement…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="footer-note">Encaissement Mobile Money simulé — en production : API MTN MoMo Collections / Moov / Celtiis (request-to-pay + webhook)</div>
+</main>
+
+<script src="assets/app.js"></script>
+<script>
+let LINES = {}, payMethod = 'MTN_MOMO';
+const selLine=document.getElementById('selLine'),
+      selFrom=document.getElementById('selFrom'),
+      selTo=document.getElementById('selTo');
+
+function fillStops(){
+  const L_=LINES[selLine.value]; if(!L_)return;
+  selFrom.innerHTML=L_.stops.map(s=>`<option>${s.name}</option>`).join('');
+  selTo.innerHTML=L_.stops.map(s=>`<option>${s.name}</option>`).join('');
+  selTo.selectedIndex=L_.stops.length-1;
+  document.getElementById('fareLbl').textContent=L_.fare_fcfa+' FCFA';
+  document.getElementById('btnPay').textContent='Payer '+L_.fare_fcfa+' FCFA';
+}
+
+async function init(){
+  const lines = await api('/network/lines');
+  lines.forEach(l=>LINES[l.id]=l);
+  selLine.innerHTML=lines.map(l=>`<option value="${l.id}">Ligne ${l.id} — ${l.name}</option>`).join('');
+  fillStops();
+  refreshRecent();
+}
+selLine.addEventListener('change',fillStops);
+
+document.querySelectorAll('#payMethods span').forEach(s=>s.addEventListener('click',()=>{
+  document.querySelectorAll('#payMethods span').forEach(x=>x.classList.remove('on'));
+  s.classList.add('on'); payMethod=s.dataset.m;
+}));
+
+document.getElementById('btnPay').addEventListener('click', async ()=>{
+  const btn=document.getElementById('btnPay'), err=document.getElementById('payError');
+  err.className='val-result';
+  btn.disabled=true; btn.textContent='Paiement en cours…';
+  try{
+    const d = await api('/tickets',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        line_id:selLine.value, from_stop:selFrom.value, to_stop:selTo.value,
+        payment_method:payMethod,
+        phone:document.getElementById('phone').value.replace(/\s/g,'')
+      })});
+    document.getElementById('tNo').textContent='BILLET Nº '+d.code+' · réf. '+d.payment_ref;
+    document.getElementById('tRoute').textContent=`Ligne ${d.line_id} · ${d.from_stop} → ${d.to_stop}`;
+    document.getElementById('tQr').src='data:image/png;base64,'+d.qr_png_base64;
+    document.getElementById('tValid').textContent=
+      'Valable jusqu\u2019à '+fmtTime(d.expires_at)+' · usage unique · à présenter au valideur';
+    document.getElementById('ticket').classList.add('show');
+    try{ sessionStorage.setItem('lastTicketCode', d.code); }catch(_){}
+    refreshRecent();
+  }catch(e){
+    err.classList.add('ko'); err.textContent='⛔ Paiement refusé : '+e.message;
+  }finally{
+    btn.disabled=false; fillStops();
+  }
+});
+
+async function refreshRecent(){
+  try{
+    const rows = await api('/tickets/recent?limit=8');
+    const tb=document.getElementById('ticketRows');
+    if(!rows.length){
+      tb.innerHTML='<tr><td colspan="5" style="color:var(--muted)">Aucun billet émis pour l\u2019instant — soyez le premier !</td></tr>';
+      return;
+    }
+    tb.innerHTML=rows.map(t=>`<tr>
+      <td class="mono" style="font-size:.75rem">${t.code}</td>
+      <td>L${t.line_id} · ${t.from_stop} → ${t.to_stop}</td>
+      <td>${t.payment_method.replace('_',' ')}</td>
+      <td><span class="badge ${t.status}">${t.status==='PAID'?'Payé':t.status==='VALIDATED'?'Validé':'Expiré'}</span></td>
+      <td>${fmtTime(t.created_at)}</td></tr>`).join('');
+  }catch(e){/* silencieux */}
+}
+
+init();
+setInterval(refreshRecent, 8000);
+</script>
+</body>
+</html>
