@@ -1,0 +1,1 @@
+fastapi>=0.110sqlalchemy>=2.0qrcode[pil]>=7.4psycopg[binary]>=3.1uvicorn[standard]>=0.29
